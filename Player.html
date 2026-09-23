@@ -1,0 +1,60 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Player Report</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#0d0f12;color:#eee;font-family:Arial,sans-serif;min-height:100vh}.wrap{max-width:640px;margin:0 auto;padding:24px}.card{background:#171a1f;border:1px solid #30353d;border-radius:15px;padding:20px;margin-bottom:14px}h1,h2{color:#f5c542;margin:0 0 8px}label{display:block;margin:12px 0 6px;font-size:13px;color:#cbd0d7}input,textarea{width:100%;background:#0f1216;color:#fff;border:1px solid #30353d;border-radius:9px;padding:11px;font:inherit}textarea{min-height:100px}.btn{border:0;border-radius:9px;padding:12px 16px;background:#f5c542;color:#111;font-weight:800;cursor:pointer;width:100%;margin-top:12px}.muted{color:#9da5af;font-size:13px}.toast{display:none;position:fixed;right:15px;bottom:15px;background:#242930;border:1px solid #414852;padding:12px 15px;border-radius:10px;z-index:20}.toast.show{display:block}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #30353d;font-size:13px}</style></head><body>
+<div class="wrap">
+  <div class="card">
+    <h1>🎮 Report a Player</h1>
+    <p class="muted">Fill in this form to report a player who broke the rules. All reports will reach the Owner/Developer.</p>
+    <label>Your Name (Reporter) *</label><input id="reporter" placeholder="Your in-game username">
+    <label>Player Name to Report *</label><input id="targetName" placeholder="Player username">
+    <label>Player ID (10 digits) *</label><input id="targetId" maxlength="10" inputmode="numeric" placeholder="1234567890">
+    <label>Reason *</label><textarea id="reason" placeholder="Example: cheats, toxic, scam..."></textarea>
+    <label>Evidence — choose image from photos (optional)</label><input id="evidenceFile" type="file" accept="image/*">
+    <button class="btn" onclick="submitReport()">Submit Report</button>
+  </div>
+  <div class="card">
+    <h2>Your Reports</h2>
+    <p class="muted">Enter your name to see the status of reports you have submitted.</p>
+    <label>Your Name</label><input id="viewName"><button class="btn" onclick="viewMy()">View</button>
+    <div id="myList" style="margin-top:14px"></div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+<script src="cloud.js"></script>
+<script>
+function esc(x){ return String(x??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+async function submitReport(){
+  const reporter = document.getElementById('reporter').value.trim();
+  const username = document.getElementById('targetName').value.trim();
+  const playerId = document.getElementById('targetId').value.trim();
+  const reason = document.getElementById('reason').value.trim();
+  if(!reporter||!username||!reason) return toast('Fill in all required fields.');
+  if(!/^[0-9]{10}$/.test(playerId)) return toast('Player ID must be 10 digits.');
+  const f = document.getElementById('evidenceFile').files[0];
+  let evidence = ''; if(f){ evidence = await fileToBase64(f); }
+  const d = await cloudPull();
+  d.playerReports.unshift({
+    id: crypto.randomUUID(),
+    reporter, username, playerId, reason, evidence,
+    author: reporter, role: 'player',
+    status: 'pending', date: new Date().toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'medium'})
+  });
+  await cloudPush(d);
+  document.getElementById('targetName').value='';
+  document.getElementById('targetId').value='';
+  document.getElementById('reason').value='';
+  document.getElementById('evidenceFile').value='';
+  toast('Report submitted. Thank you!');
+}
+async function viewMy(){
+  const name = document.getElementById('viewName').value.trim().toLowerCase();
+  if(!name) return;
+  const d = await cloudPull();
+  const list = d.playerReports.filter(r => (r.reporter||'').toLowerCase() === name);
+  const el = document.getElementById('myList');
+  if(!list.length){ el.innerHTML = '<p class="muted">No reports found.</p>'; return; }
+  el.innerHTML = list.map(r =>
+    '<div class="row"><span><b>'+esc(r.username)+'</b> (ID: '+esc(r.playerId)+')<br><span class="muted">'+esc(r.date)+'</span></span><span>'+esc(r.status)+'</span></div>'
+  ).join('');
+}
+</script></body></html>
