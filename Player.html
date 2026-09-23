@@ -19,10 +19,36 @@
   </div>
 </div>
 <div id="toast" class="toast"></div>
-<script src="cloud.js"></script>
 <script>
+// ===== CONFIG — TUKAR URL DATABASE BARU DI SINI =====
+const FB_URL = 'https://syspanel-8a5fa-default-rtdb.asia-southeast1.firebasedatabase.app';
+const DB = 'SYS_PANEL_DATABASE_V8';
+const OWNER = { username:'mialyshyi', password:'airilsafwansamp1', role:'owner', active:true };
+// ====================================================
+
+let CACHE=null;
+function fresh(){ return { users:[{...OWNER}], bugReports:[], playerReports:[], bans:[], history:[], notifications:[], leaveRequests:[] }; }
+function get(){ if(!CACHE){ try{ CACHE=JSON.parse(localStorage.getItem(DB))||fresh(); }catch(e){ CACHE=fresh(); } } return CACHE; }
+async function cloudPull(){
+  try{
+    const r = await fetch(FB_URL+'/syspanel.json?t='+Date.now());
+    let d = await r.json();
+    if(!d||typeof d!=='object'){ d=fresh(); await cloudPush(d); return d; }
+    for(const k of ['users','bugReports','playerReports','bans','history','notifications','leaveRequests']) d[k]??=[];
+    if(!d.users.some(x=>x.username===OWNER.username&&x.role==='owner')) d.users.unshift({...OWNER});
+    CACHE=d; try{ localStorage.setItem(DB,JSON.stringify(d)); }catch(e){}
+    return d;
+  }catch(e){ console.warn('cloud pull failed',e); return get(); }
+}
+async function cloudPush(d){
+  CACHE=d; try{ localStorage.setItem(DB,JSON.stringify(d)); }catch(e){}
+  try{ await fetch(FB_URL+'/syspanel.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}); }
+  catch(e){ console.warn('cloud push failed',e); }
+}
 function esc(x){ return String(x??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+function fileToBase64(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
+// ===== player functions =====
 async function submitReport(){
   const reporter = document.getElementById('reporter').value.trim();
   const username = document.getElementById('targetName').value.trim();
