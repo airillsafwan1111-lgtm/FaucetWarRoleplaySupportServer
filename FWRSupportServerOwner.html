@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FWR Support Server — Owner</title><style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3}
+header{background:#161b22;border-bottom:1px solid #30363d;padding:16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}
+.brand{font-weight:800;letter-spacing:.4px}.sub{color:#8b949e;font-size:12px;margin-top:3px}
+button{border:0;border-radius:9px;padding:11px 14px;background:#eab308;color:#111;font-weight:700;cursor:pointer}
+button.secondary{background:#30363d;color:#fff}
+button.danger{background:#dc2626;color:#fff}
+.wrap{max-width:1000px;margin:auto;padding:16px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:16px;margin:12px 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat{background:#1c2128;border:1px solid #30363d;border-radius:12px;padding:14px}
+.muted{color:#8b949e}.row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.list{display:flex;flex-direction:column;gap:8px}.item{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#30363d;font-size:12px}
+nav{display:flex;gap:8px;overflow-x:auto;padding:10px 16px;background:#161b22;border-bottom:1px solid #30363d}
+nav button{white-space:nowrap}
+.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;padding:18px;z-index:20}
+.modalbox{width:min(420px,100%);background:#161b22;border:1px solid #30363d;border-radius:14px;padding:20px}
+@media(max-width:650px){.grid{grid-template-columns:1fr}header{padding:12px}.wrap{padding:10px}nav{padding:8px 10px}button{padding:10px 11px}.card{padding:13px}}
+</style></head><body>
+<header><div><div class="brand">FWR SUPPORT SERVER</div><div class="sub">Owner Control Panel</div></div><button class="secondary" onclick="logout()">Log out</button></header>
+<nav><button onclick="show('dashboard')">Dashboard</button><button onclick="show('reports')">Reports</button><button onclick="show('team')">Team</button></nav>
+<div class="wrap">
+<section id="dashboard"><div class="card"><h2>Dashboard</h2><p class="muted">FWR Support Server control panel.</p><div class="grid"><div class="stat"><b>Bug Reports</b><div id="bugCount">0</div></div><div class="stat"><b>Player Reports</b><div id="playerCount">0</div></div></div></div></section>
+<section id="reports" class="hidden"><div class="card"><h2>Reports</h2><div class="row"><button onclick="loadReports()">Refresh</button></div><h3>Bug Reports</h3><div id="bugs" class="list"></div><h3>Player Reports</h3><div id="players" class="list"></div></div></section>
+<section id="team" class="hidden"><div class="card"><h2>Team</h2><p class="muted">Team members already created in the database appear here.</p><div id="teamList" class="list"></div></div></section>
+
+</div>
+<div id="logoutModal" class="modal hidden"><div class="modalbox"><h3>Log out?</h3><p class="muted">Are you sure you want to log out?</p><div class="row"><button class="secondary" onclick="closeLogout()">Cancel</button><button class="danger" onclick="confirmLogout()">Log out</button></div></div></div>
+<script>
+const KEY='FWR_SUPPORT_SERVER_DATABASE_V1';
+const seed={users:[{username:'mialyshyi',password:'airilsafwansamp1',role:'owner',active:true}],bugReports:[],playerReports:[],bans:[],history:[],notifications:[]};
+function db(){try{return Object.assign({},seed,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){return seed}}
+function save(d){localStorage.setItem(KEY,JSON.stringify(d))}
+function show(id){['dashboard','reports','team'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));load()}
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function load(){
+ const d=db(); document.getElementById('bugCount').textContent=(d.bugReports||[]).length;document.getElementById('playerCount').textContent=(d.playerReports||[]).length;
+ document.getElementById('teamList').innerHTML=(d.users||[]).filter(x=>x.active!==false).map(x=>'<div class="item"><b>'+esc(x.username)+'</b><br><span class="badge">'+esc(x.role)+'</span></div>').join('')||'<div class="muted">No team members.</div>';
+ loadReports();
+}
+function loadReports(){
+ const d=db();
+ document.getElementById('bugs').innerHTML=(d.bugReports||[]).map(x=>'<div class="item"><b>'+esc(x.title||'Bug Report')+'</b><br>Reported by: <b>'+esc(x.author||x.reporterUsername||'Unknown')+'</b><br>'+esc(x.description||'')+'<br><span class="badge">'+esc(x.status||'pending')+'</span></div>').join('')||'<div class="muted">No bug reports.</div>';
+ document.getElementById('players').innerHTML=(d.playerReports||[]).map(x=>'<div class="item"><b>'+esc(x.user||x.playerUsername||'Player')+'</b><br>Reported by: <b>'+esc(x.author||x.reporterUsername||'Unknown')+'</b><br>ID: '+esc(x.pid||x.playerId||'')+'<br>'+esc(x.reason||'')+'<br><span class="badge">'+esc(x.status||'pending')+'</span></div>').join('')||'<div class="muted">No player reports.</div>';
+}
+function logout(){document.getElementById('logoutModal').classList.remove('hidden')}
+function closeLogout(){document.getElementById('logoutModal').classList.add('hidden')}
+function confirmLogout(){sessionStorage.clear();location.reload()}
+load();
+</script></body></html>
