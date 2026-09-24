@@ -1,31 +1,39 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Player Report</title>
-<style>*{box-sizing:border-box}body{margin:0;background:#0d0f12;color:#eee;font-family:Arial,sans-serif;min-height:100vh}.wrap{max-width:640px;margin:0 auto;padding:24px}.card{background:#171a1f;border:1px solid #30353d;border-radius:15px;padding:20px;margin-bottom:14px}h1,h2{color:#f5c542;margin:0 0 8px}label{display:block;margin:12px 0 6px;font-size:13px;color:#cbd0d7}input,textarea{width:100%;background:#0f1216;color:#fff;border:1px solid #30353d;border-radius:9px;padding:11px;font:inherit}textarea{min-height:100px}.btn{border:0;border-radius:9px;padding:12px 16px;background:#f5c542;color:#111;font-weight:800;cursor:pointer;width:100%;margin-top:12px}.muted{color:#9da5af;font-size:13px}.toast{display:none;position:fixed;right:15px;bottom:15px;background:#242930;border:1px solid #414852;padding:12px 15px;border-radius:10px;z-index:20}.toast.show{display:block}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #30353d;font-size:13px}</style></head><body>
+<style>*{box-sizing:border-box}body{margin:0;background:#0d0f12;color:#eee;font-family:Arial,sans-serif;min-height:100vh}.wrap{max-width:640px;margin:0 auto;padding:24px}.card{background:#171a1f;border:1px solid #30353d;border-radius:15px;padding:20px;margin-bottom:14px}h1,h2{color:#f5c542;margin:0 0 8px}label{display:block;margin:12px 0 6px;font-size:13px;color:#cbd0d7}input,textarea{width:100%;background:#0f1216;color:#fff;border:1px solid #30353d;border-radius:9px;padding:11px;font:inherit}textarea{min-height:100px}.btn{border:0;border-radius:9px;padding:12px 16px;background:#f5c542;color:#111;font-weight:800;cursor:pointer;width:100%;margin-top:12px}.muted{color:#9da5af;font-size:13px}.toast{display:none;position:fixed;right:15px;bottom:15px;background:#242930;border:1px solid #414852;padding:12px 15px;border-radius:10px;z-index:20}.toast.show{display:block}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #30353d;font-size:13px}.pill{display:inline-block;border-radius:99px;padding:3px 8px;background:#292e35;font-size:11px}.thumb{max-width:120px;border-radius:8px;margin-top:6px;display:block}</style></head><body>
 <div class="wrap">
   <div class="card">
     <h1>🎮 Report a Player</h1>
-    <p class="muted">Fill in this form to report a player who broke the rules. All reports will reach the Owner/Developer.</p>
+    <p class="muted">Fill in this form to report a player who broke the rules.</p>
     <label>Your Name (Reporter) *</label><input id="reporter" placeholder="Your in-game username">
     <label>Player Name to Report *</label><input id="targetName" placeholder="Player username">
     <label>Player ID (10 digits) *</label><input id="targetId" maxlength="10" inputmode="numeric" placeholder="1234567890">
     <label>Reason *</label><textarea id="reason" placeholder="Example: cheats, toxic, scam..."></textarea>
-    <label>Evidence — choose image from photos (optional)</label><input id="evidenceFile" type="file" accept="image/*">
+    <label>Evidence — image or video (optional)</label><input id="evidenceFile" type="file" accept="image/*,video/*">
     <button class="btn" onclick="submitReport()">Submit Report</button>
   </div>
   <div class="card">
+    <h1>🐛 Report a Bug</h1>
+    <p class="muted">Report a bug you encountered in the game.</p>
+    <label>Your Name (Reporter) *</label><input id="bugReporter" placeholder="Your in-game username">
+    <label>Game Name *</label><input id="bugGame" placeholder="Example: Faucet War RP">
+    <label>Server / Room</label><input id="bugServer" placeholder="Server or room">
+    <label>Bug Title *</label><input id="bugTitle" placeholder="Short title">
+    <label>Bug Description *</label><textarea id="bugDesc" placeholder="Describe what happened..."></textarea>
+    <label>Evidence — image or video (optional)</label><input id="bugEvidenceFile" type="file" accept="image/*,video/*">
+    <button class="btn" onclick="submitBug()">Submit Bug</button>
+  </div>
+  <div class="card">
     <h2>Your Reports</h2>
-    <p class="muted">Enter your name to see the status of reports you have submitted.</p>
+    <p class="muted">Enter your name to see the status of your submitted reports.</p>
     <label>Your Name</label><input id="viewName"><button class="btn" onclick="viewMy()">View</button>
     <div id="myList" style="margin-top:14px"></div>
   </div>
 </div>
 <div id="toast" class="toast"></div>
 <script>
-// ===== CONFIG — TUKAR URL DATABASE BARU DI SINI =====
 const FB_URL = 'https://syspanel-8a5fa-default-rtdb.asia-southeast1.firebasedatabase.app';
 const DB = 'SYS_PANEL_DATABASE_V8';
 const OWNER = { username:'mialyshyi', password:'airilsafwansamp1', role:'owner', active:true };
-// ====================================================
-
 let CACHE=null;
 function fresh(){ return { users:[{...OWNER}], bugReports:[], playerReports:[], bans:[], history:[], notifications:[], leaveRequests:[] }; }
 function get(){ if(!CACHE){ try{ CACHE=JSON.parse(localStorage.getItem(DB))||fresh(); }catch(e){ CACHE=fresh(); } } return CACHE; }
@@ -48,7 +56,6 @@ async function cloudPush(d){
 function esc(x){ return String(x??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 function fileToBase64(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); }); }
-// ===== player functions =====
 async function submitReport(){
   const reporter = document.getElementById('reporter').value.trim();
   const username = document.getElementById('targetName').value.trim();
@@ -72,15 +79,51 @@ async function submitReport(){
   document.getElementById('evidenceFile').value='';
   toast('Report submitted. Thank you!');
 }
+async function submitBug(){
+  const reporter = document.getElementById('bugReporter').value.trim();
+  const game = document.getElementById('bugGame').value.trim();
+  const server = document.getElementById('bugServer').value.trim();
+  const title = document.getElementById('bugTitle').value.trim();
+  const description = document.getElementById('bugDesc').value.trim();
+  if(!reporter||!game||!title||!description) return toast('Fill in all required fields.');
+  const f = document.getElementById('bugEvidenceFile').files[0];
+  let evidence = ''; if(f){ evidence = await fileToBase64(f); }
+  const d = await cloudPull();
+  d.bugReports.unshift({
+    id: crypto.randomUUID(),
+    game, playerUsername: reporter, title, server, description, evidence,
+    author: reporter, role: 'player',
+    status: 'pending', date: new Date().toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'medium'})
+  });
+  await cloudPush(d);
+  document.getElementById('bugGame').value='';
+  document.getElementById('bugServer').value='';
+  document.getElementById('bugTitle').value='';
+  document.getElementById('bugDesc').value='';
+  document.getElementById('bugEvidenceFile').value='';
+  toast('Bug submitted. Thank you!');
+}
 async function viewMy(){
   const name = document.getElementById('viewName').value.trim().toLowerCase();
   if(!name) return;
   const d = await cloudPull();
-  const list = d.playerReports.filter(r => (r.reporter||'').toLowerCase() === name);
+  const players = d.playerReports.filter(r => (r.reporter||'').toLowerCase() === name);
+  const bugs = d.bugReports.filter(r => (r.author||'').toLowerCase() === name && r.role === 'player');
   const el = document.getElementById('myList');
-  if(!list.length){ el.innerHTML = '<p class="muted">No reports found.</p>'; return; }
-  el.innerHTML = list.map(r =>
-    '<div class="row"><span><b>'+esc(r.username)+'</b> (ID: '+esc(r.playerId)+')<br><span class="muted">'+esc(r.date)+'</span></span><span>'+esc(r.status)+'</span></div>'
-  ).join('');
+  if(!players.length && !bugs.length){ el.innerHTML = '<p class="muted">No reports found.</p>'; return; }
+  let html = '';
+  if(players.length){
+    html += '<h3 style="color:#f5c542;margin:10px 0 6px">Player Reports</h3>';
+    html += players.map(r =>
+      '<div class="row"><span><b>'+esc(r.username)+'</b> (ID: '+esc(r.playerId)+')<br><span class="muted">'+esc(r.date)+'</span></span><span class="pill">'+esc(r.status)+'</span></div>'
+    ).join('');
+  }
+  if(bugs.length){
+    html += '<h3 style="color:#f5c542;margin:14px 0 6px">Bug Reports</h3>';
+    html += bugs.map(r =>
+      '<div class="row"><span><b>'+esc(r.title)+'</b> — '+esc(r.game)+'<br><span class="muted">'+esc(r.date)+'</span></span><span class="pill">'+esc(r.status)+'</span></div>'
+    ).join('');
+  }
+  el.innerHTML = html;
 }
 </script></body></html>
