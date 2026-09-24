@@ -29,9 +29,11 @@ const FB_URL = 'https://syspanel-8a5fa-default-rtdb.asia-southeast1.firebasedata
 const DB = 'SYS_PANEL_DATABASE_V8';
 const OWNER = { username:'mialyshyi', password:'airilsafwansamp1', role:'owner', active:true };
 const ROLE = 'staff';
+const AUTO_HIDE_MS = 3600000;
 let CACHE=null, syncTimer=null;
 function fresh(){ return { users:[{...OWNER}], bugReports:[], playerReports:[], bans:[], history:[], notifications:[], leaveRequests:[] }; }
 function get(){ if(!CACHE){ try{ CACHE=JSON.parse(localStorage.getItem(DB))||fresh(); }catch(e){ CACHE=fresh(); } } return CACHE; }
+function visibleInPanel(r){ if(r.status==='pending') return true; if(!r.expiresAt) return true; return r.expiresAt > Date.now(); }
 async function cloudPull(){
   try{
     const r = await fetch(FB_URL+'/syspanel.json?t='+Date.now());
@@ -81,7 +83,10 @@ function evidenceHTML(ev){
   if(ev.startsWith('data:video')) return '<br><video class="thumb" src="'+esc(ev)+'" controls></video>';
   return '<br><img class="thumb" src="'+esc(ev)+'">';
 }
-function stats(){ const d=get(); sUsers.textContent=d.users.filter(x=>x.active).length; sBugs.textContent=d.bugReports.length; sPlayer.textContent=d.playerReports.length; sBans.textContent=d.bans.length; sLeave.textContent=d.leaveRequests.filter(l=>l.status==='pending').length; }
+function stats(){ const d=get();
+  const vBugs = d.bugReports.filter(visibleInPanel);
+  const vPlayers = d.playerReports.filter(visibleInPanel);
+  sUsers.textContent=d.users.filter(x=>x.active).length; sBugs.textContent=vBugs.length; sPlayer.textContent=vPlayers.length; sBans.textContent=d.bans.length; sLeave.textContent=d.leaveRequests.filter(l=>l.status==='pending').length; }
 function bugForm(){ document.getElementById('bugForm').innerHTML='<div class="card"><h3>In-Game Bug Report</h3><div class="form"><div><label>Game Name *</label><input id="bgGame"></div><div><label>Player Username *</label><input id="bgUser"></div><div><label>Bug Title *</label><input id="bgTitle"></div><div><label>Server / Room</label><input id="bgServer"></div><div class="full"><label>Bug Description *</label><textarea id="bgDesc"></textarea></div><div class="full"><label>Evidence — image or video</label><input id="bgEvidenceFile" type="file" accept="image/*,video/*"></div></div><div class="actions"><button class="btn" onclick="submitBug()">Submit Bug</button></div></div>'; }
 async function submitBug(){ const d=get(), x=me(); const f=document.getElementById('bgEvidenceFile').files[0];
   let evidence=''; if(f) evidence=await fileToBase64(f);
@@ -89,9 +94,10 @@ async function submitBug(){ const d=get(), x=me(); const f=document.getElementBy
   if(!r.game||!r.playerUsername||!r.title||!r.description) return toast('Fill all required fields.');
   d.bugReports.unshift(r); await cloudPush(d); bugForm(); rerender(); toast('Submitted.'); }
 function renderBugs(){ const el=document.getElementById('bugsTable'); const d=get();
-  if(!d.bugReports.length){ el.innerHTML='<div class="empty">No reports.</div>'; return; }
-  el.innerHTML='<div class="tablewrap"><table class="table"><tr><th>Game / Player</th><th>Bug</th><th>Author</th><th>Status</th><th>Action</th></tr>'+d.bugReports.map(r=>'<tr><td>'+esc(r.game)+'<br>'+esc(r.playerUsername)+'</td><td><b>'+esc(r.title)+'</b><br>'+esc(r.description)+evidenceHTML(r.evidence)+'</td><td>'+esc(r.author)+'<br>'+esc(r.date)+'</td><td>'+esc(r.status)+'</td><td>'+(r.status==='pending'?'<button class="btn green small" onclick="acceptBug(\''+r.id+'\')">Accept</button>':'—')+'</td></tr>').join('')+'</table></div>'; }
-async function acceptBug(id){ const d=get(), r=d.bugReports.find(x=>x.id===id); if(!r) return; r.status='accepted'; r.acceptedBy=me().username; r.acceptedAt=time(); await cloudPush(d); rerender(); toast('Accepted.'); }
+  const list = d.bugReports.filter(visibleInPanel);
+  if(!list.length){ el.innerHTML='<div class="empty">No reports.</div>'; return; }
+  el.innerHTML='<div class="tablewrap"><table class="table"><tr><th>Game / Player</th><th>Bug</th><th>Author</th><th>Status</th><th>Action</th></tr>'+list.map(r=>'<tr><td>'+esc(r.game)+'<br>'+esc(r.playerUsername)+'</td><td><b>'+esc(r.title)+'</b><br>'+esc(r.description)+evidenceHTML(r.evidence)+'</td><td>'+esc(r.author)+'<br>'+esc(r.date)+'</td><td>'+esc(r.status)+'</td><td>'+(r.status==='pending'?'<button class="btn green small" onclick="acceptBug(\''+r.id+'\')">Accept</button>':'—')+'</td></tr>').join('')+'</table></div>'; }
+async function acceptBug(id){ const d=get(), r=d.bugReports.find(x=>x.id===id); if(!r) return; r.status='accepted'; r.acceptedBy=me().username; r.acceptedAt=time(); r.expiresAt=Date.now()+AUTO_HIDE_MS; await cloudPush(d); rerender(); toast('Accepted. Hidden from panel in 1 hour.'); }
 function playerForm(){ document.getElementById('playerForm').innerHTML='<div class="card"><h3>Report Player</h3><div class="form"><div><label>Player Username *</label><input id="prUser"></div><div><label>Player ID (10 digits) *</label><input id="prId" maxlength="10" inputmode="numeric"></div><div class="full"><label>Reason *</label><textarea id="prReason"></textarea></div><div class="full"><label>Evidence — image or video</label><input id="prEvidenceFile" type="file" accept="image/*,video/*"></div></div><div class="actions"><button class="btn danger" onclick="submitPlayer()">Submit</button></div></div>'; }
 async function submitPlayer(){ const u=prUser.value.trim(), id=prId.value.trim(), reason=prReason.value.trim();
   if(!u||!/^[0-9]{10}$/.test(id)||!reason) return toast('Fill all.');
@@ -99,10 +105,11 @@ async function submitPlayer(){ const u=prUser.value.trim(), id=prId.value.trim()
   const d=get(), x=me(); d.playerReports.unshift({id:crypto.randomUUID(),reporter:x.username,username:u,playerId:id,reason,evidence,author:x.username,role:x.role,status:'pending',date:time()});
   await cloudPush(d); playerForm(); rerender(); toast('Submitted.'); }
 function renderPlayers(){ const el=document.getElementById('playersTable'); const d=get();
-  if(!d.playerReports.length){ el.innerHTML='<div class="empty">No reports.</div>'; return; }
-  el.innerHTML='<div class="tablewrap"><table class="table"><tr><th>Reporter</th><th>Reported</th><th>Reason</th><th>Status</th><th>Action</th></tr>'+d.playerReports.map(r=>'<tr><td>'+esc(r.reporter||r.author)+'</td><td><b>'+esc(r.username)+'</b><br>ID: '+esc(r.playerId)+'</td><td>'+esc(r.reason)+evidenceHTML(r.evidence)+'</td><td>'+esc(r.status)+(r.declinedBy?'<br><span class="muted">by '+esc(r.declinedBy)+'</span>':'')+'</td><td>'+(r.status==='pending'?'<button class="btn green small" onclick="acceptPlayer(\''+r.id+'\')">Accept</button> <button class="btn danger small" onclick="declinePlayer(\''+r.id+'\')">Decline</button>':'—')+'</td></tr>').join('')+'</table></div>'; }
-async function acceptPlayer(id){ const d=get(), r=d.playerReports.find(x=>x.id===id); if(!r) return; r.status='accepted'; r.acceptedBy=me().username; r.acceptedAt=time(); await cloudPush(d); rerender(); toast('Accepted.'); }
-async function declinePlayer(id){ const d=get(), r=d.playerReports.find(x=>x.id===id); if(!r) return; r.status='declined'; r.declinedBy=me().username; r.declinedAt=time(); await cloudPush(d); rerender(); toast('Declined.'); }
+  const list = d.playerReports.filter(visibleInPanel);
+  if(!list.length){ el.innerHTML='<div class="empty">No reports.</div>'; return; }
+  el.innerHTML='<div class="tablewrap"><table class="table"><tr><th>Reporter</th><th>Reported</th><th>Reason</th><th>Status</th><th>Action</th></tr>'+list.map(r=>'<tr><td>'+esc(r.reporter||r.author)+'</td><td><b>'+esc(r.username)+'</b><br>ID: '+esc(r.playerId)+'</td><td>'+esc(r.reason)+evidenceHTML(r.evidence)+'</td><td>'+esc(r.status)+(r.declinedBy?'<br><span class="muted">by '+esc(r.declinedBy)+'</span>':'')+'</td><td>'+(r.status==='pending'?'<button class="btn green small" onclick="acceptPlayer(\''+r.id+'\')">Accept</button> <button class="btn danger small" onclick="declinePlayer(\''+r.id+'\')">Decline</button>':'—')+'</td></tr>').join('')+'</table></div>'; }
+async function acceptPlayer(id){ const d=get(), r=d.playerReports.find(x=>x.id===id); if(!r) return; r.status='accepted'; r.acceptedBy=me().username; r.acceptedAt=time(); r.expiresAt=Date.now()+AUTO_HIDE_MS; await cloudPush(d); rerender(); toast('Accepted. Hidden from panel in 1 hour.'); }
+async function declinePlayer(id){ const d=get(), r=d.playerReports.find(x=>x.id===id); if(!r) return; r.status='declined'; r.declinedBy=me().username; r.declinedAt=time(); r.expiresAt=Date.now()+AUTO_HIDE_MS; await cloudPush(d); rerender(); toast('Declined. Hidden from panel in 1 hour.'); }
 function leaveForm(){ document.getElementById('leaveForm').innerHTML='<div class="card"><h3>Submit Leave</h3><div class="form"><div><label>From *</label><input id="lvFrom" type="date"></div><div><label>To *</label><input id="lvTo" type="date"></div><div class="full"><label>Reason *</label><textarea id="lvReason"></textarea></div></div><div class="actions"><button class="btn" onclick="submitLeave()">Submit</button></div></div>'; }
 async function submitLeave(){ const x=me(); const from=lvFrom.value, to=lvTo.value, reason=lvReason.value.trim();
   if(!from||!to||!reason) return toast('Fill all.'); const d=get();
